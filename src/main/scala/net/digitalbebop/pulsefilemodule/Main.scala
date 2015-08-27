@@ -64,7 +64,6 @@ class fileFilter extends FilenameFilter {
 object Main {
 
   val startTime = System.currentTimeMillis() / 1000
-  final val moduleName = "files"
   final val apiServer = "http://localhost:8080"
   final val ldapHost = "ldap.csh.rit.edu"
   final val ldapPort = 389
@@ -88,11 +87,10 @@ object Main {
     "text/html" -> new HtmlExtractor()
   )
   */
-  val processors = Map(
-    ".pdf" -> new PdfExtractor()
-    //".txt" -> new TextExtractor(),
-    //".text" -> new TextExtractor(),
-    //".html" -> new HtmlExtractor()
+  val processors = Map[String, (File, Map[String, String]) => IndexRequest](
+    ".pdf" -> Extracter.processPdf,
+    ".jpg" -> Extracter.processImage,
+    ".png" -> Extracter.processImage
   )
 
   lazy val getSocketFactory: SSLSocketFactory = {
@@ -106,23 +104,13 @@ object Main {
     val ldapConnection = new LDAPConnection(ldapHost, ldapPort)
     ldapConnection.bind(username, password)
 
-    val result = ldapConnection.search("ou=Users,dc=csh,dc=rit,dc=edu", SearchScope.SUBORDINATE_SUBTREE, "(uid=*)", "uid", "uidNumber")
+    val result = ldapConnection.search("ou=Users,dc=csh,dc=rit,dc=edu",
+      SearchScope.SUBORDINATE_SUBTREE, "(uid=*)", "uid", "uidNumber")
     ldapConnection.close()
 
     result.getSearchEntries.map { entity =>
       (entity.getAttributeValue("uidNumber"), entity.getAttributeValue("uid"))
     }.toMap
-  }
-
-  def walkFiles(dir: File, fun: File => Unit): Unit = {
-    if (dir.isDirectory) {
-      val children = dir.listFiles()
-      if (children != null) {
-        children.foreach(f => walkFiles(f, fun))
-      }
-    } else {
-      fun(dir)
-    }
   }
 
   def getFiles(dir: File, queue: BlockingQueue[String]): Unit = {
@@ -142,26 +130,9 @@ object Main {
   }
 
   def processFile(file: File): Unit = try {
-    //val fileType = Files.probeContentType(Paths.get(file.getAbsolutePath))
-    val fileExt = file.getName.substring(file.getName.lastIndexOf("."))
+    val fileExt = file.getName.substring(file.getName.lastIndexOf(".")).toLowerCase
     processors.get(fileExt).map { extractor =>
-      val (indexData, format, rawData) = extractor.processFile(file)
-      val builder = IndexRequest.newBuilder()
-      builder.setIndexData(indexData)
-      rawData match {
-        case Some(data) => builder.setRawData(ByteString.copyFrom(data))
-        case None =>
-      }
-
-      builder.setLocation(file.getAbsolutePath)
-      builder.setMetaTags(new JSONObject(Map(("format", format), ("title", file.getName))).toString)
-      builder.setTimestamp(file.lastModified())
-      builder.setModuleId(file.getAbsolutePath)
-      builder.setModuleName(moduleName)
-      builder.setLocation(file.getAbsolutePath)
-      val view = Files.getFileAttributeView(Paths.get(file.getAbsolutePath), classOf[FileOwnerAttributeView])
-      builder.setUsername(uidMap(view.getOwner.getName))
-      val message = builder.build()
+      val message = extractor(file, uidMap)
       val post = new HttpPost(s"$apiServer/api/index")
       post.setEntity(new ByteArrayEntity(message.toByteArray))
       HttpClients.createDefault().execute(post).close()
@@ -172,7 +143,7 @@ object Main {
       }
     }
   } catch {
-    case ex: Exception => {}
+    case ex: Exception =>
   }
 
   def main(args: Array[String]): Unit = {
@@ -219,8 +190,6 @@ object Main {
         }
       })
     }
-
-    //walkFiles(new File(dir), processFile)
 
     ec.threadPool.shutdown()
     ec.threadPool.awaitTermination(Long.MaxValue, TimeUnit.NANOSECONDS)

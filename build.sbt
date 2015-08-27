@@ -21,7 +21,8 @@ libraryDependencies ++= Seq(
   "org.bouncycastle" % "bcpkix-jdk15on" % "1.49",
   "org.apache.santuario" % "xmlsec" % "1.5.1",
   "com.itextpdf" % "itextpdf" % "5.5.6",
-  "org.jsoup" % "jsoup" % "1.8.3"
+  "org.jsoup" % "jsoup" % "1.8.3",
+  "com.unboundid" % "unboundid-ldapsdk" % "3.0.0"
 )
 
 assemblySettings

@@ -1,46 +1,100 @@
 package net.digitalbebop.pulsefilemodule
 
 import java.io.{FileInputStream, File}
+import java.nio.file.attribute.FileOwnerAttributeView
+import java.nio.file.{Paths, Files}
 
+import com.google.protobuf.ByteString
 import com.itextpdf.text.pdf.PdfReader
 import com.itextpdf.text.pdf.parser.PdfTextExtractor
+import net.digitalbebop.ClientRequests.IndexRequest
 import org.apache.commons.io.IOUtils
-import org.jsoup.Jsoup
 
-import scala.io.Source
+import scala.util.parsing.json.JSONObject
 
 
-trait Extracter {
-  // index data, raw data, format
-  def processFile(file: File): (String, String, Option[Array[Byte]])
-}
+object Extracter {
 
-class PdfExtractor extends Extracter {
-  def processFile(file: File): (String, String, Option[Array[Byte]]) = {
+  private final val fileModule = "files"
+  private final val imageModule = "images"
+  private final val videoModule = "videos"
+
+  def processPdf(file: File, uidMap: Map[String, String]): IndexRequest = {
     val reader = new PdfReader(file.getAbsolutePath)
     val pages = reader.getNumberOfPages
-    val builder = new StringBuilder()
+    val strBuilder = new StringBuilder()
 
     for (page <- 1 to pages) {
-      builder.append(PdfTextExtractor.getTextFromPage(reader, page) + " ")
+      strBuilder.append(PdfTextExtractor.getTextFromPage(reader, page) + " ")
     }
-    val indexData = builder.toString()
+    val indexData = strBuilder.toString()
     val rawData = IOUtils.toByteArray(new FileInputStream(file))
-    (indexData, "pdf", Some(rawData))
-  }
-}
 
-class TextExtractor extends Extracter {
-  def processFile(file: File): (String, String, Option[Array[Byte]]) = {
-    (Source.fromFile(file).mkString, "text", None)
-  }
-}
+    val indexBuilder = IndexRequest.newBuilder()
 
-class HtmlExtractor extends Extracter {
-  def processFile(file: File): (String, String, Option[Array[Byte]]) = {
-    val rawData = Source.fromFile(file).mkString
-    val indexedData = Jsoup.parse(rawData).body().text()
-    (indexedData, "html", Some(rawData.getBytes))
+    indexBuilder.setIndexData(indexData)
+    rawData.map(data => indexBuilder.setRawData(ByteString.copyFrom(rawData)))
+    indexBuilder.setLocation(file.getAbsolutePath)
+    indexBuilder.setMetaTags(new JSONObject(Map(("format", "pdf"), ("title", file.getName))).toString())
+    indexBuilder.setTimestamp(file.lastModified())
+    indexBuilder.setModuleId(file.getAbsolutePath)
+    indexBuilder.setModuleName(fileModule)
+    val view = Files.getFileAttributeView(Paths.get(file.getAbsolutePath), classOf[FileOwnerAttributeView])
+    uidMap.get(view.getOwner.getName).map(indexBuilder.setUsername)
+    indexBuilder.build()
+  }
+
+
+  def processImage(file: File, uidMap: Map[String, String]): IndexRequest = {
+    val rawData = Files.readAllBytes(file.toPath)
+    val strBuilder = new StringBuilder()
+    file.getAbsolutePath.split("/").dropWhile(_ != "albums").tail.foreach(dir =>
+      strBuilder.append(" " + dir.replaceAll("[_|-]", " ")))
+    val indexData = strBuilder.toString()
+    val url = "https://gallery.csh.rit.edu/v"
+    val albums = "albums"
+
+    val path = file.getAbsolutePath
+    val location = path.substring(path.indexOf(albums) + albums.length)
+
+    val indexBuilder = IndexRequest.newBuilder()
+
+    indexBuilder.setIndexData(indexData)
+    indexBuilder.setRawData(ByteString.copyFrom(rawData))
+    indexBuilder.setLocation(s"$url/$location")
+
+    indexBuilder.setMetaTags(new JSONObject(Map(("format", "image"), ("title", file.getName.replaceAll("[_|-]", " ")))).toString())
+    indexBuilder.setTimestamp(file.lastModified())
+    indexBuilder.setModuleId(file.getAbsolutePath)
+    indexBuilder.setModuleName(imageModule)
+
+    indexBuilder.build()
+  }
+
+  def processMovie(file: File, uidMap: Map[String, String]): IndexRequest = {
+    val rawData = Files.readAllBytes(file.toPath)
+    val strBuilder = new StringBuilder()
+    file.getAbsolutePath.split("/").dropWhile(_ != "albums").tail.foreach(dir =>
+      strBuilder.append(" " + dir.replaceAll("[_|-]", " ")))
+    val indexData = strBuilder.toString()
+    val url = "https://gallery.csh.rit.edu/v"
+    val albums = "albums"
+
+    val path = file.getAbsolutePath
+    val location = path.substring(path.indexOf(albums) + albums.length)
+
+    val indexBuilder = IndexRequest.newBuilder()
+
+    indexBuilder.setIndexData(indexData)
+    indexBuilder.setRawData(ByteString.copyFrom(rawData))
+    indexBuilder.setLocation(s"$url/$location")
+
+    indexBuilder.setMetaTags(new JSONObject(Map(("format", "video"), ("title", file.getName.replaceAll("[_|-]", " ")))).toString())
+    indexBuilder.setTimestamp(file.lastModified())
+    indexBuilder.setModuleId(file.getAbsolutePath)
+    indexBuilder.setModuleName(videoModule)
+
+    indexBuilder.build()
   }
 }
 
