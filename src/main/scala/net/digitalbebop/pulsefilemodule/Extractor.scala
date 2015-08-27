@@ -1,4 +1,4 @@
-package net.digitalbebop.pulsewebnewsmodule
+package net.digitalbebop.pulsefilemodule
 
 import java.io.{FileInputStream, File}
 
