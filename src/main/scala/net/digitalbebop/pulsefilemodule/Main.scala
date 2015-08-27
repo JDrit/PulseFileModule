@@ -80,17 +80,8 @@ object Main {
     def reportFailure(t: Throwable) {}
   }
 
-  /*
-  val processors = Map(
-    "application/pdf" -> new PdfExtractor(),
-    "text/plain" -> new TextExtractor(),
-    "text/html" -> new HtmlExtractor()
-  )
-  */
   val processors = Map[String, (File, Map[String, String]) => IndexRequest](
-    ".pdf" -> Extracter.processPdf,
-    ".jpg" -> Extracter.processImage,
-    ".png" -> Extracter.processImage
+    ".pdf" -> Extracter.processPdf
   )
 
   lazy val getSocketFactory: SSLSocketFactory = {
@@ -165,7 +156,6 @@ object Main {
     val queue = new ArrayBlockingQueue[String](10)
     val POISON_PILL = "POISON PILL"
 
-
     val f =  new FutureTask[Unit](new Callable[Unit]() {
       def call(): Unit = {
         getFiles(new File(dir), queue)
@@ -175,7 +165,7 @@ object Main {
 
     ec.execute(f)
 
-    val workerCount = Runtime.getRuntime().availableProcessors() * 2
+    val workerCount = Runtime.getRuntime.availableProcessors() * 2
     for (i <- 1 to workerCount) {
       ec.execute(new Runnable() {
         def run() : Unit = {

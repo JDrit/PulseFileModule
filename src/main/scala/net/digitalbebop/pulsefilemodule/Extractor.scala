@@ -16,8 +16,6 @@ import scala.util.parsing.json.JSONObject
 object Extracter {
 
   private final val fileModule = "files"
-  private final val imageModule = "images"
-  private final val videoModule = "videos"
 
   def processPdf(file: File, uidMap: Map[String, String]): IndexRequest = {
     val reader = new PdfReader(file.getAbsolutePath)
@@ -41,59 +39,6 @@ object Extracter {
     indexBuilder.setModuleName(fileModule)
     val view = Files.getFileAttributeView(Paths.get(file.getAbsolutePath), classOf[FileOwnerAttributeView])
     uidMap.get(view.getOwner.getName).map(indexBuilder.setUsername)
-    indexBuilder.build()
-  }
-
-
-  def processImage(file: File, uidMap: Map[String, String]): IndexRequest = {
-    val rawData = Files.readAllBytes(file.toPath)
-    val strBuilder = new StringBuilder()
-    file.getAbsolutePath.split("/").dropWhile(_ != "albums").tail.foreach(dir =>
-      strBuilder.append(" " + dir.replaceAll("[_|-]", " ")))
-    val indexData = strBuilder.toString()
-    val url = "https://gallery.csh.rit.edu/v"
-    val albums = "albums"
-
-    val path = file.getAbsolutePath
-    val location = path.substring(path.indexOf(albums) + albums.length)
-
-    val indexBuilder = IndexRequest.newBuilder()
-
-    indexBuilder.setIndexData(indexData)
-    indexBuilder.setRawData(ByteString.copyFrom(rawData))
-    indexBuilder.setLocation(s"$url/$location")
-
-    indexBuilder.setMetaTags(new JSONObject(Map(("format", "image"), ("title", file.getName.replaceAll("[_|-]", " ")))).toString())
-    indexBuilder.setTimestamp(file.lastModified())
-    indexBuilder.setModuleId(file.getAbsolutePath)
-    indexBuilder.setModuleName(imageModule)
-
-    indexBuilder.build()
-  }
-
-  def processMovie(file: File, uidMap: Map[String, String]): IndexRequest = {
-    val rawData = Files.readAllBytes(file.toPath)
-    val strBuilder = new StringBuilder()
-    file.getAbsolutePath.split("/").dropWhile(_ != "albums").tail.foreach(dir =>
-      strBuilder.append(" " + dir.replaceAll("[_|-]", " ")))
-    val indexData = strBuilder.toString()
-    val url = "https://gallery.csh.rit.edu/v"
-    val albums = "albums"
-
-    val path = file.getAbsolutePath
-    val location = path.substring(path.indexOf(albums) + albums.length)
-
-    val indexBuilder = IndexRequest.newBuilder()
-
-    indexBuilder.setIndexData(indexData)
-    indexBuilder.setRawData(ByteString.copyFrom(rawData))
-    indexBuilder.setLocation(s"$url/$location")
-
-    indexBuilder.setMetaTags(new JSONObject(Map(("format", "video"), ("title", file.getName.replaceAll("[_|-]", " ")))).toString())
-    indexBuilder.setTimestamp(file.lastModified())
-    indexBuilder.setModuleId(file.getAbsolutePath)
-    indexBuilder.setModuleName(videoModule)
-
     indexBuilder.build()
   }
 }
