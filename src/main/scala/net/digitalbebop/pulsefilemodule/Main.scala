@@ -47,20 +47,6 @@ class NaiveTrustManager extends X509TrustManager {
    def getAcceptedIssuers(): Array[X509Certificate] = Array()
 }
 
-class fileFilter extends FilenameFilter {
-
-  val extensions = List(".pdf", ".txt", ".text")
-
-  def accept(dir: File, name: String): Boolean = {
-    for (ext <- extensions) {
-      if (name.endsWith(ext)) {
-        return true
-      }
-    }
-    return false
-  }
-}
-
 object Main {
 
   val startTime = System.currentTimeMillis() / 1000
@@ -99,25 +85,20 @@ object Main {
       SearchScope.SUBORDINATE_SUBTREE, "(uid=*)", "uid", "uidNumber")
     ldapConnection.close()
 
-    result.getSearchEntries.map { entity =>
+    val map = result.getSearchEntries.map { entity =>
       (entity.getAttributeValue("uidNumber"), entity.getAttributeValue("uid"))
     }.toMap
+    println("generated uid map")
+    map
   }
 
-  def getFiles(dir: File, queue: BlockingQueue[String]): Unit = {
-    if (dir.isDirectory) {
-      val children = dir.listFiles()
-      if (children != null)
-        children.foreach(f => getFiles(f, queue))
-    } else {
-      val lastIndex = dir.getName.indexOf(".")
-      if (lastIndex != -1 && !dir.getAbsolutePath.contains("/.")) {
-        val fileExt = dir.getName.substring(dir.getName.lastIndexOf("."))
-        if (processors.contains(fileExt)) {
-          queue.put(dir.getAbsolutePath)
-        }
-      }
-    }
+  def getFiles(dir: File, queue: BlockingQueue[String]): Unit = if (dir.isDirectory) {
+    val children = dir.listFiles()
+    if (children != null)
+      children.foreach(f => getFiles(f, queue))
+  } else if (dir.getName.toLowerCase.endsWith(".pdf")) {
+    println(dir)
+    queue.put(dir.getAbsolutePath)
   }
 
   def processFile(file: File): Unit = try {
@@ -128,10 +109,8 @@ object Main {
       post.setEntity(new ByteArrayEntity(message.toByteArray))
       HttpClients.createDefault().execute(post).close()
       val amount = filesProcessed.incrementAndGet()
-      if (amount % 100 == 0) {
-        val timeDiff = System.currentTimeMillis() / 1000 - startTime
-        println(s"processed $amount files, ${(1.0 * amount) / timeDiff} files/sec")
-      }
+      val timeDiff = System.currentTimeMillis() / 1000 - startTime
+      println(s"processed $amount files, ${(1.0 * amount) / timeDiff} files/sec")
     }
   } catch {
     case ex: Exception =>

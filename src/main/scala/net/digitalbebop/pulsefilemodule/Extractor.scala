@@ -17,6 +17,14 @@ object Extracter {
 
   private final val fileModule = "files"
 
+  private def splitCamelCase(s: String): String = s.replaceAll(String.format("%s|%s|%s",
+    "(?<=[A-Z])(?=[A-Z][a-z])", "(?<=[^A-Z])(?=[A-Z])", "(?<=[A-Za-z])(?=[^A-Za-z])"), " ")
+
+  private def replaceSplits(s: String) = s.replaceAll("[_|-]", " ")
+
+  private def cleanString: String => String = splitCamelCase _ compose replaceSplits
+
+  // TODO add tags for file name
   def processPdf(file: File, uidMap: Map[String, String]): IndexRequest = {
     val reader = new PdfReader(file.getAbsolutePath)
     val pages = reader.getNumberOfPages
@@ -37,6 +45,7 @@ object Extracter {
     indexBuilder.setTimestamp(file.lastModified())
     indexBuilder.setModuleId(file.getAbsolutePath)
     indexBuilder.setModuleName(fileModule)
+
     val view = Files.getFileAttributeView(Paths.get(file.getAbsolutePath), classOf[FileOwnerAttributeView])
     uidMap.get(view.getOwner.getName).map(indexBuilder.setUsername)
     indexBuilder.build()
