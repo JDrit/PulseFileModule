@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import com.itextpdf.text.pdf.PdfReader
 import com.itextpdf.text.pdf.parser.PdfTextExtractor
 import net.digitalbebop.ClientRequests.IndexRequest
-import org.apache.commons.io.IOUtils
+import org.apache.commons.io.{FilenameUtils, IOUtils}
 
 import scala.util.parsing.json.JSONObject
 
@@ -23,6 +23,17 @@ object Extracter {
   private def replaceSplits(s: String) = s.replaceAll("[_|-]", " ")
 
   private def cleanString: String => String = splitCamelCase _ compose replaceSplits
+
+  private def getTags(file: File, uidMap: Map[String, String]): Array[String] =
+    file.getAbsolutePath.split("/")
+      .dropWhile(s => !uidMap.contains(s))
+      .flatMap { name =>
+        if (name.endsWith(".pdf")) {
+          cleanString(FilenameUtils.removeExtension(name)).split(" ")
+        } else {
+          cleanString(name).split(" ")
+        }
+      }
 
   // TODO add tags for file name
   def processPdf(file: File, uidMap: Map[String, String]): IndexRequest = {
@@ -45,6 +56,7 @@ object Extracter {
     indexBuilder.setTimestamp(file.lastModified())
     indexBuilder.setModuleId(file.getAbsolutePath)
     indexBuilder.setModuleName(fileModule)
+    getTags(file, uidMap).foreach(indexBuilder.addTags)
 
     val view = Files.getFileAttributeView(Paths.get(file.getAbsolutePath), classOf[FileOwnerAttributeView])
     uidMap.get(view.getOwner.getName).map(indexBuilder.setUsername)
