@@ -67,7 +67,7 @@ object Main {
   }
 
   val processors = Map[String, (File, Map[String, String]) => IndexRequest](
-    ".pdf" -> Extracter.processPdf
+    ".pdf" -> Extractor.processPdf
   )
 
   lazy val getSocketFactory: SSLSocketFactory = {
@@ -92,13 +92,14 @@ object Main {
     map
   }
 
-  def getFiles(dir: File, queue: BlockingQueue[String]): Unit = if (dir.isDirectory) {
+  def getFiles(dir: File, pool: ExecutorService): Unit = if (dir.isDirectory) {
     val children = dir.listFiles()
     if (children != null)
-      children.foreach(f => getFiles(f, queue))
+      children.foreach(f => getFiles(f, pool))
   } else if (dir.getName.toLowerCase.endsWith(".pdf")) {
-    println(dir)
-    queue.put(dir.getAbsolutePath)
+    pool.submit(new Runnable() {
+      def run() : Unit = processFile(dir)
+    })
   }
 
   def processFile(file: File): Unit = try {
@@ -132,7 +133,7 @@ object Main {
     print(s"ldap password for ($username): ")
     password = System.console().readPassword().mkString("")
 
-    val queue = new ArrayBlockingQueue[String](10)
+    /*val queue = new ArrayBlockingQueue[String](10)
     val POISON_PILL = "POISON PILL"
 
     val f =  new FutureTask[Unit](new Callable[Unit]() {
@@ -144,8 +145,9 @@ object Main {
 
     ec.execute(f)
 
-    val workerCount = Runtime.getRuntime.availableProcessors() * 2
-    for (i <- 1 to workerCount) {
+    val cores = Runtime.getRuntime.availableProcessors
+    val pool = Executors.newFixedThreadPool(cores * 2)
+    for (i <- 1 to cores) {
       ec.execute(new Runnable() {
         def run() : Unit = {
           while (true) {
@@ -161,7 +163,13 @@ object Main {
     }
 
     ec.threadPool.shutdown()
-    ec.threadPool.awaitTermination(Long.MaxValue, TimeUnit.NANOSECONDS)
+    ec.threadPool.awaitTermination(Long.MaxValue, TimeUnit.DAYS)*/
+
+    val cores = Runtime.getRuntime.availableProcessors
+    val pool = Executors.newFixedThreadPool(cores * 2)
+    getFiles(new File(dir), pool)
+    pool.shutdown()
+    pool.awaitTermination(Long.MaxValue, TimeUnit.DAYS)
 
     val endTime = System.currentTimeMillis() / 1000
 
