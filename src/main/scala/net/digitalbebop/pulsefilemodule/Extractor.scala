@@ -3,6 +3,7 @@ package net.digitalbebop.pulsefilemodule
 import java.io.{FileInputStream, File}
 import java.nio.file.attribute.FileOwnerAttributeView
 import java.nio.file.{Paths, Files}
+import java.util.UUID
 
 import com.google.protobuf.ByteString
 import com.itextpdf.text.pdf.PdfReader
@@ -54,7 +55,7 @@ object Extracter {
     indexBuilder.setLocation(file.getAbsolutePath)
     indexBuilder.setMetaTags(new JSONObject(Map(("format", "pdf"), ("title", file.getName))).toString())
     indexBuilder.setTimestamp(file.lastModified())
-    indexBuilder.setModuleId(file.getAbsolutePath)
+    indexBuilder.setModuleId(UUID.nameUUIDFromBytes(file.getAbsolutePath.getBytes).toString)
     indexBuilder.setModuleName(fileModule)
     getTags(file, uidMap).foreach(indexBuilder.addTags)
 
